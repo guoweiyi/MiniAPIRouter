@@ -1,0 +1,529 @@
+const Config = (() => {
+  let keys = [];
+  let rules = [];
+  let intents = [];
+
+  function init() {
+    document.getElementById('btn-add-key').addEventListener('click', () => showKeyModal());
+    document.getElementById('btn-add-rule').addEventListener('click', () => showRuleModal());
+    document.getElementById('btn-add-intent').addEventListener('click', () => showIntentModal());
+    document.getElementById('btn-clear-chat').addEventListener('click', () => {
+      Chat.clear();
+      Chat.loadModels();
+    });
+  }
+
+  async function load() {
+    await Promise.all([loadKeys(), loadRules(), loadIntents()]);
+  }
+
+  async function loadKeys() {
+    try {
+      const data = await API.get('/api/v1/config/api-keys?page=1&page_size=100');
+      keys = data.list || [];
+      renderKeys();
+    } catch (e) {
+      showToast('加载 API Key 失败: ' + e.message, 'error');
+    }
+  }
+
+  async function loadRules() {
+    try {
+      const data = await API.get('/api/v1/config/route-rules?page=1&page_size=100');
+      rules = data.list || [];
+      renderRules();
+    } catch (e) {
+      showToast('加载路由规则失败: ' + e.message, 'error');
+    }
+  }
+
+  async function loadIntents() {
+    try {
+      const data = await API.get('/api/v1/config/intents');
+      intents = data.list || [];
+      renderIntents();
+    } catch (e) {
+      showToast('加载意图配置失败: ' + e.message, 'error');
+    }
+  }
+
+  function renderKeys() {
+    const container = document.getElementById('key-list');
+    if (keys.length === 0) {
+      container.innerHTML = '<div class="empty-state">暂无 API Key，点击右上角添加</div>';
+      return;
+    }
+    container.innerHTML = keys.map(k => `
+      <div class="key-item">
+        <div class="key-info">
+          <div class="key-name">${escapeHtml(k.name)}</div>
+          <div class="key-meta">
+            ${escapeHtml(k.provider)} · ${escapeHtml(k.protocol)} · ${escapeHtml((k.models||[]).join(', '))}
+            <br>${escapeHtml(k.base_url)} · Key: ${escapeHtml(k.api_key_masked)}
+          </div>
+        </div>
+        <div class="flex items-center gap-8">
+          <span class="badge ${k.status === 1 ? 'badge-green' : 'badge-gray'}">${k.status === 1 ? '启用' : '禁用'}</span>
+          <span class="badge ${k.health_status === 'healthy' ? 'badge-green' : k.health_status === 'down' ? 'badge-red' : k.health_status === 'degraded' ? 'badge-orange' : 'badge-gray'}">${escapeHtml(k.health_status)}</span>
+          <button class="btn btn-sm" onclick="Config.toggleKey(${k.id}, ${k.status === 1 ? 0 : 1})">${k.status === 1 ? '禁用' : '启用'}</button>
+          <button class="btn btn-sm" onclick="Config.showKeyModal(${k.id})">编辑</button>
+          <button class="btn btn-sm btn-danger" onclick="Config.deleteKey(${k.id})">删除</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderRules() {
+    const container = document.getElementById('rule-list');
+    if (rules.length === 0) {
+      container.innerHTML = '<div class="empty-state">暂无路由规则</div>';
+      return;
+    }
+    container.innerHTML = rules.map(r => {
+      const targetNames = (r.target_keys || []).map(t => escapeHtml(t.name)).join(', ');
+      return `
+        <div class="rule-item">
+          <div class="rule-header">
+            <div>
+              <span class="rule-name">${escapeHtml(r.rule_name)}</span>
+              <span class="badge ${r.enabled ? 'badge-green' : 'badge-gray'} ml-8">${r.enabled ? '启用' : '禁用'}</span>
+            </div>
+            <div class="flex gap-8">
+              <button class="btn btn-sm" onclick="Config.toggleRule(${r.id}, ${!r.enabled})">${r.enabled ? '禁用' : '启用'}</button>
+              <button class="btn btn-sm" onclick="Config.showRuleModal(${r.id})">编辑</button>
+              <button class="btn btn-sm btn-danger" onclick="Config.deleteRule(${r.id})">删除</button>
+            </div>
+          </div>
+          <div class="rule-meta">
+            匹配: ${escapeHtml(r.match_type)} = ${escapeHtml(r.match_pattern)} · 策略: ${escapeHtml(r.strategy)}
+            ${r.intent_model ? ' · 意图模型: ' + escapeHtml(r.intent_model) : ''}
+            <br>目标 Key: ${targetNames || '<span class="text-muted">自动使用全部</span>'}
+            ${r.fallback_enabled ? ' · Fallback: ✅ (max=' + (r.max_fallback||0) + ')' : ' · Fallback: ❌'}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function showKeyModal(id) {
+    const key = id ? keys.find(k => k.id === id) : null;
+    const overlay = document.getElementById('modal-overlay');
+    overlay.querySelector('.modal').innerHTML = `
+      <div class="modal-header">
+        <span class="modal-title">${key ? '编辑' : '添加'} API Key</span>
+        <button class="btn btn-sm btn-icon" onclick="Config.closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>名称</label>
+          <input id="key-name" value="${key ? escapeHtml(key.name) : ''}" placeholder="DeepSeek 主账号">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>供应商</label>
+            <input id="key-provider" list="provider-suggestions" value="${key ? escapeHtml(key.provider) : ''}" placeholder="deepseek / 自定义" autocomplete="off">
+            <datalist id="provider-suggestions">
+              ${[...new Set([...(keys.map(k => k.provider).filter(Boolean)), 'deepseek','openai','anthropic','azure','gemini'])]
+                .map(p => `<option value="${escapeHtml(p)}">`).join('')}
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label>协议</label>
+            <select id="key-protocol">
+              <option value="openai" ${!key || key.protocol === 'openai' ? 'selected' : ''}>openai</option>
+              <option value="anthropic" ${key && key.protocol === 'anthropic' ? 'selected' : ''}>anthropic</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>API Key ${key ? '(留空不修改)' : ''}</label>
+          <input id="key-apikey" type="password" placeholder="sk-xxx">
+        </div>
+        <div class="form-group">
+          <label>Base URL <span class="text-muted">(完整请求地址)</span></label>
+          <input id="key-baseurl" value="${key ? escapeHtml(key.base_url) : 'https://api.deepseek.com'}" placeholder="https://api.deepseek.com">
+        </div>
+        <div class="form-group">
+          <label>支持的模型 (逗号分隔)</label>
+          <input id="key-models" value="${key ? (key.models||[]).join(', ') : 'deepseek-v4-flash'}">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>权重</label>
+            <input id="key-weight" type="number" value="${key ? key.weight : 1}" min="0">
+          </div>
+          <div class="form-group">
+            <label>优先级</label>
+            <input id="key-priority" type="number" value="${key ? key.priority : 0}" min="0">
+          </div>
+          <div class="form-group">
+            <label>超时(ms)</label>
+            <input id="key-timeout" type="number" value="${key ? key.timeout_ms : 30000}">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="Config.closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="Config.saveKey(${id || ''})">保存</button>
+      </div>
+    `;
+    overlay.classList.add('active');
+  }
+
+  async function saveKey(id) {
+    const modelsStr = document.getElementById('key-models').value;
+    const body = {
+      name: document.getElementById('key-name').value,
+      provider: document.getElementById('key-provider').value,
+      protocol: document.getElementById('key-protocol').value,
+      base_url: document.getElementById('key-baseurl').value,
+      models: modelsStr.split(',').map(s => s.trim()).filter(Boolean),
+      weight: parseInt(document.getElementById('key-weight').value) || 1,
+      priority: parseInt(document.getElementById('key-priority').value) || 0,
+      timeout_ms: parseInt(document.getElementById('key-timeout').value) || 30000,
+    };
+    const apiKey = document.getElementById('key-apikey').value;
+    if (apiKey) body.api_key = apiKey;
+
+    try {
+      if (id) {
+        await API.put('/api/v1/config/api-keys/' + id, body);
+        showToast('Key 已更新');
+      } else {
+        await API.post('/api/v1/config/api-keys', body);
+        showToast('Key 已创建');
+      }
+      closeModal();
+      await loadKeys();
+      Chat.loadModels();
+    } catch (e) {
+      showToast('保存失败: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteKey(id) {
+    if (!confirm('确定删除此 API Key?')) return;
+    try {
+      await API.del('/api/v1/config/api-keys/' + id);
+      showToast('Key 已删除');
+      await loadKeys();
+      Chat.loadModels();
+    } catch (e) {
+      showToast('删除失败: ' + e.message, 'error');
+    }
+  }
+
+  async function toggleKey(id, status) {
+    try {
+      await API.patch('/api/v1/config/api-keys/' + id + '/status', { status });
+      showToast(status === 1 ? '已启用' : '已禁用');
+      await loadKeys();
+    } catch (e) {
+      showToast('操作失败: ' + e.message, 'error');
+    }
+  }
+
+  function showRuleModal(id) {
+    const rule = id ? rules.find(r => r.id === id) : null;
+    const overlay = document.getElementById('modal-overlay');
+    const keyOptions = keys.map(k =>
+      `<option value="${k.id}" ${rule && (rule.target_key_ids||[]).includes(k.id) ? 'selected' : ''}>${escapeHtml(k.name)}</option>`
+    ).join('');
+
+    const allModels = [...new Set(keys.flatMap(k => k.models || []))];
+    const intentModelOptions = allModels.map(m =>
+      `<option value="${escapeHtml(m)}" ${rule && rule.intent_model === m ? 'selected' : ''}>${escapeHtml(m)}</option>`
+    ).join('');
+
+    overlay.querySelector('.modal').innerHTML = `
+      <div class="modal-header">
+        <span class="modal-title">${rule ? '编辑' : '添加'}路由规则</span>
+        <button class="btn btn-sm btn-icon" onclick="Config.closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>规则名称</label>
+          <input id="rule-name" value="${rule ? escapeHtml(rule.rule_name) : ''}" placeholder="DeepSeek 路由">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>匹配类型</label>
+            <select id="rule-match-type" onchange="Config.onMatchTypeChange()">
+              <option value="model" ${!rule || rule.match_type === 'model' ? 'selected' : ''}>model (模型名通配)</option>
+              <option value="intent" ${rule && rule.match_type === 'intent' ? 'selected' : ''}>intent (意图路由)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>匹配模式</label>
+            <input id="rule-match-pattern" value="${rule ? escapeHtml(rule.match_pattern) : '*'}" placeholder="deepseek-v4*">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>目标 Key (不选则自动使用全部)</label>
+          <select id="rule-target-keys" multiple style="min-height:80px">${keyOptions}</select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>路由策略</label>
+            <select id="rule-strategy">
+              ${['weight','round_robin','priority','least_conn'].map(s =>
+                `<option value="${s}" ${!rule || rule.strategy === s ? 'selected' : ''}>${s}</option>`
+              ).join('')}
+            </select>
+          </div>
+          <div class="form-group" id="intent-model-group" style="display:none">
+            <label>意图评估模型</label>
+            <select id="rule-intent-model">
+              <option value="">-- 选择模型 --</option>
+              ${intentModelOptions}
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Fallback</label>
+            <select id="rule-fallback">
+              <option value="true" ${!rule || rule.fallback_enabled ? 'selected' : ''}>启用</option>
+              <option value="false" ${rule && !rule.fallback_enabled ? 'selected' : ''}>禁用</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>最大 Fallback 次数</label>
+            <input id="rule-max-fallback" type="number" value="${rule ? (rule.max_fallback||0) : 2}" min="0">
+          </div>
+          <div class="form-group">
+            <label>优先级</label>
+            <input id="rule-priority" type="number" value="${rule ? (rule.priority||0) : 0}" min="0">
+          </div>
+          <div class="form-group">
+            <label>启用</label>
+            <select id="rule-enabled">
+              <option value="true" ${!rule || rule.enabled ? 'selected' : ''}>启用</option>
+              <option value="false" ${rule && !rule.enabled ? 'selected' : ''}>禁用</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="Config.closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="Config.saveRule(${id || ''})">保存</button>
+      </div>
+    `;
+    overlay.classList.add('active');
+    onMatchTypeChange();
+  }
+
+  function onMatchTypeChange() {
+    const matchType = document.getElementById('rule-match-type').value;
+    const intentGroup = document.getElementById('intent-model-group');
+    if (intentGroup) intentGroup.style.display = matchType === 'intent' ? '' : 'none';
+  }
+
+  async function saveRule(id) {
+    const targetKeys = Array.from(document.getElementById('rule-target-keys').selectedOptions).map(o => parseInt(o.value));
+    const body = {
+      rule_name: document.getElementById('rule-name').value,
+      match_type: document.getElementById('rule-match-type').value,
+      match_pattern: document.getElementById('rule-match-pattern').value,
+      target_key_ids: targetKeys,
+      strategy: document.getElementById('rule-strategy').value,
+      fallback_enabled: document.getElementById('rule-fallback').value === 'true',
+      max_fallback: parseInt(document.getElementById('rule-max-fallback').value) || 0,
+      priority: parseInt(document.getElementById('rule-priority').value) || 0,
+      enabled: document.getElementById('rule-enabled').value === 'true',
+    };
+    const intentModel = document.getElementById('rule-intent-model');
+    if (intentModel && intentModel.value) body.intent_model = intentModel.value;
+
+    try {
+      if (id) {
+        await API.put('/api/v1/config/route-rules/' + id, body);
+        showToast('规则已更新');
+      } else {
+        await API.post('/api/v1/config/route-rules', body);
+        showToast('规则已创建');
+      }
+      closeModal();
+      await loadRules();
+    } catch (e) {
+      showToast('保存失败: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteRule(id) {
+    if (!confirm('确定删除此路由规则?')) return;
+    try {
+      await API.del('/api/v1/config/route-rules/' + id);
+      showToast('规则已删除');
+      await loadRules();
+    } catch (e) {
+      showToast('删除失败: ' + e.message, 'error');
+    }
+  }
+
+  async function toggleRule(id, enabled) {
+    try {
+      await API.patch('/api/v1/config/route-rules/' + id + '/enabled', { enabled });
+      showToast(enabled ? '已启用' : '已禁用');
+      await loadRules();
+    } catch (e) {
+      showToast('操作失败: ' + e.message, 'error');
+    }
+  }
+
+  function renderIntents() {
+    const container = document.getElementById('intent-list');
+    if (intents.length === 0) {
+      container.innerHTML = '<div class="empty-state">暂无意图配置，点击右上角添加</div>';
+      return;
+    }
+    container.innerHTML = intents.map(i => {
+      const targetNames = (i.target_keys || []).map(t => escapeHtml(t.name)).join(', ');
+      const weightsStr = i.key_weights && Object.keys(i.key_weights).length > 0
+        ? Object.entries(i.key_weights).map(([kId, w]) => `#${kId}:${w}`).join(', ')
+        : '<span class="text-muted">继承模型评分</span>';
+      const isDefault = i.is_default;
+      const itemClass = isDefault ? 'rule-item intent-default' : 'rule-item';
+      const inheritBadge = isDefault
+        ? '<span class="badge badge-blue ml-8">默认模板</span>'
+        : (i.customized
+            ? '<span class="badge badge-orange ml-8">已自定义</span>'
+            : '<span class="badge badge-gray ml-8">继承默认</span>');
+      const deleteBtn = isDefault ? '' : `<button class="btn btn-sm btn-danger" onclick="Config.deleteIntent(${i.id})">删除</button>`;
+      return `
+        <div class="${itemClass}">
+          <div class="rule-header">
+            <div>
+              <span class="rule-name">${escapeHtml(i.name)} <span class="text-muted">(${escapeHtml(i.label)})</span></span>
+              <span class="badge ${i.enabled ? 'badge-green' : 'badge-gray'} ml-8">${i.enabled ? '启用' : '禁用'}</span>
+              ${inheritBadge}
+            </div>
+            <div class="flex gap-8">
+              <button class="btn btn-sm" onclick="Config.showIntentModal(${i.id})">编辑</button>
+              ${deleteBtn}
+            </div>
+          </div>
+          <div class="rule-meta">
+            ${escapeHtml(i.description || '')}
+            <br>目标 Key: ${targetNames || '<span class="text-muted">自动使用全部（继承 Auto）</span>'}
+            <br>模型权重: ${weightsStr}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function showIntentModal(id) {
+    const intent = id ? intents.find(i => i.id === id) : null;
+    const overlay = document.getElementById('modal-overlay');
+    const keyOptions = keys.map(k =>
+      `<option value="${k.id}" ${intent && (intent.target_key_ids||[]).includes(k.id) ? 'selected' : ''}>${escapeHtml(k.name)} (${escapeHtml(k.provider)})</option>`
+    ).join('');
+    const weightsRows = keys.map(k => {
+      const w = intent && intent.key_weights ? (intent.key_weights[k.id] || '') : '';
+      return `<div class="form-row"><label class="flex-1">#${k.id} ${escapeHtml(k.name)}</label><input class="intent-weight-input" data-key-id="${k.id}" type="number" min="0" max="100" value="${w}" placeholder="留空=继承模型评分" style="width:140px"></div>`;
+    }).join('');
+
+    overlay.querySelector('.modal').innerHTML = `
+      <div class="modal-header">
+        <span class="modal-title">${intent ? '编辑' : '添加'}意图</span>
+        <button class="btn btn-sm btn-icon" onclick="Config.closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        ${intent && intent.is_default ? '<div class="form-hint">编辑默认意图路由将同步到所有「继承默认」的意图配置</div>' : ''}
+        <div class="form-row">
+          <div class="form-group">
+            <label>标签 (label)</label>
+            <input id="intent-label" value="${intent ? escapeHtml(intent.label) : ''}" placeholder="reasoning" ${intent && intent.is_default ? 'readonly' : ''}>
+          </div>
+          <div class="form-group">
+            <label>名称</label>
+            <input id="intent-name" value="${intent ? escapeHtml(intent.name) : ''}" placeholder="推理思考">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>描述</label>
+          <input id="intent-description" value="${intent ? escapeHtml(intent.description||'') : ''}" placeholder="逻辑分析、数学计算、复杂推理">
+        </div>
+        <div class="form-group">
+          <label>目标 Key (不选则继承 Auto Route 使用全部)</label>
+          <select id="intent-target-keys" multiple style="min-height:80px">${keyOptions}</select>
+        </div>
+        <div class="form-group">
+          <label>模型权重 (0-100，留空=继承意图评估模型评分)</label>
+          ${weightsRows}
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>排序</label>
+            <input id="intent-sort-order" type="number" value="${intent ? (intent.sort_order||0) : 0}" min="0">
+          </div>
+          <div class="form-group">
+            <label>启用</label>
+            <select id="intent-enabled">
+              <option value="true" ${!intent || intent.enabled ? 'selected' : ''}>启用</option>
+              <option value="false" ${intent && !intent.enabled ? 'selected' : ''}>禁用</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="Config.closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="Config.saveIntent(${id || ''})">保存</button>
+      </div>
+    `;
+    overlay.classList.add('active');
+  }
+
+  async function saveIntent(id) {
+    const targetKeys = Array.from(document.getElementById('intent-target-keys').selectedOptions).map(o => parseInt(o.value));
+    const keyWeights = {};
+    document.querySelectorAll('.intent-weight-input').forEach(input => {
+      const v = input.value.trim();
+      if (v !== '') keyWeights[input.dataset.keyId] = parseInt(v);
+    });
+    const body = {
+      label: document.getElementById('intent-label').value.trim(),
+      name: document.getElementById('intent-name').value.trim(),
+      description: document.getElementById('intent-description').value.trim(),
+      target_key_ids: targetKeys,
+      key_weights: keyWeights,
+      sort_order: parseInt(document.getElementById('intent-sort-order').value) || 0,
+      enabled: document.getElementById('intent-enabled').value === 'true',
+    };
+    if (!body.label || !body.name) { showToast('标签和名称不能为空', 'error'); return; }
+
+    try {
+      if (id) {
+        await API.put('/api/v1/config/intents/' + id, body);
+        showToast('意图已更新');
+      } else {
+        await API.post('/api/v1/config/intents', body);
+        showToast('意图已创建');
+      }
+      closeModal();
+      await loadIntents();
+    } catch (e) {
+      showToast('保存失败: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteIntent(id) {
+    if (!confirm('确定删除此意图配置?')) return;
+    try {
+      await API.del('/api/v1/config/intents/' + id);
+      showToast('意图已删除');
+      await loadIntents();
+    } catch (e) {
+      showToast('删除失败: ' + e.message, 'error');
+    }
+  }
+
+  function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('active');
+  }
+
+  return { init, load, loadKeys, loadRules, loadIntents, showKeyModal, saveKey, deleteKey, toggleKey,
+           showRuleModal, saveRule, deleteRule, toggleRule, showIntentModal, saveIntent, deleteIntent,
+           closeModal, onMatchTypeChange };
+})();

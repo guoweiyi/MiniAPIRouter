@@ -1,0 +1,52 @@
+server:
+  port: 9090
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  application:
+    name: miniapi-router-standalone
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:sqlite:${miniapi.router.data-dir}/miniapi.db
+    driver-class-name: org.sqlite.JDBC
+  jackson:
+    default-property-inclusion: non_null
+    property-naming-strategy: SNAKE_CASE
+    serialization:
+      write-dates-as-timestamps: false
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+  mvc:
+    async:
+      request-timeout: 600000
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+      id-type: auto
+
+miniapi:
+  router:
+    crypto-secret: ${STANDALONE_CRYPTO_SECRET}
+    blob-storage-path: ${miniapi.router.data-dir}/logs
+    auth-token: sk-miniapi-standalone
+logging:
+  level:
+    root: info
+    com.miniapi.router.standalone: debug

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <title>MiniAPIRouter Standalone</title>
+  <link rel="stylesheet" href="/css/app.css?v=3">
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== Navbar ===== -->
+  <nav class="navbar">
+    <span class="navbar-brand">⚡ MiniAPIRouter</span>
+    <div class="navbar-tabs">
+      <button class="nav-tab active" data-tab="chat">💬 对话</button>
+      <button class="nav-tab" data-tab="config">⚙ 配置</button>
+      <button class="nav-tab" data-tab="log">📋 日志</button>
+    </div>
+    <div class="navbar-right">
+      <span class="status-dot"></span>
+      <span id="nav-status">Running</span>
+    </div>
+  </nav>
+
+  <!-- ===== Content ===== -->
+  <div class="content">
+
+    <!-- ===== Chat View ===== -->
+    <div class="view active chat-view" id="view-chat">
+      <div class="chat-config-bar">
+        <label style="margin:0">模型:</label>
+        <select id="chat-model"></select>
+        <button class="btn btn-sm" id="btn-clear-chat" title="清空对话">🗑 清空</button>
+      </div>
+      <div class="chat-messages" id="chat-messages">
+        <div class="chat-empty" id="chat-empty">
+          <div class="chat-empty-icon">💬</div>
+          <div class="chat-empty-text">选择模型，开始对话</div>
+        </div>
+      </div>
+      <div class="chat-input-bar">
+        <textarea id="chat-input" rows="1" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"></textarea>
+        <button class="btn btn-primary" id="chat-send">发送</button>
+        <button class="btn btn-danger" id="chat-stop" style="display:none">停止</button>
+      </div>
+    </div>
+
+    <!-- ===== Config View ===== -->
+    <div class="view config-view" id="view-config">
+      <div class="config-section">
+        <div class="config-section-header">
+          <span class="card-title">API Key 配置</span>
+          <button class="btn btn-primary btn-sm" id="btn-add-key">+ 添加 Key</button>
+        </div>
+        <div class="config-section-body" id="key-list">
+          <div class="empty-state">加载中...</div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-header">
+          <span class="card-title">路由规则</span>
+          <button class="btn btn-primary btn-sm" id="btn-add-rule">+ 添加规则</button>
+        </div>
+        <div class="config-section-body" id="rule-list">
+          <div class="empty-state">加载中...</div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-header">
+          <span class="card-title">意图路由配置</span>
+          <button class="btn btn-primary btn-sm" id="btn-add-intent">+ 添加意图</button>
+        </div>
+        <div class="config-section-body" id="intent-list">
+          <div class="empty-state">加载中...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Log View ===== -->
+    <div class="view log-view" id="view-log">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">请求日志</span>
+          <div class="btn-group">
+            <button class="btn btn-sm" id="btn-dashboard">📊 看板</button>
+          </div>
+        </div>
+        <div class="log-filters mb-0">
+          <div class="form-group">
+            <label>模型</label>
+            <input id="log-filter-model" placeholder="模型名">
+          </div>
+          <div class="form-group">
+            <label>状态</label>
+            <select id="log-filter-status">
+              <option value="">全部</option>
+              <option value="success">成功</option>
+              <option value="failed">失败</option>
+              <option value="fallback">Fallback</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Trace ID</label>
+            <input id="log-filter-trace" placeholder="trace id">
+          </div>
+          <div class="form-group">
+            <button class="btn btn-primary" id="btn-log-search">🔍 查询</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>Trace ID</th>
+              <th>模型</th>
+              <th>供应商</th>
+              <th>Tokens (P/C/T)</th>
+              <th>延迟</th>
+              <th>状态</th>
+              <th>Fallback</th>
+              <th>时间</th>
+            </tr>
+          </thead>
+          <tbody id="log-table-body">
+            <tr><td colspan="8" class="empty-state">暂无日志</td></tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <span class="pagination-info" id="log-page-info">第 1 页</span>
+          <div class="btn-group">
+            <button class="btn btn-sm" id="btn-log-prev">上一页</button>
+            <button class="btn btn-sm" id="btn-log-next">下一页</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== Modal ===== -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal"></div>
+</div>
+
+<!-- ===== Toast ===== -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="/js/app.js?v=2"></script>
+<script src="/js/chat.js?v=2"></script>
+<script src="/js/config.js?v=2"></script>
+<script src="/js/log.js?v=2"></script>
+</body>
+</html>
