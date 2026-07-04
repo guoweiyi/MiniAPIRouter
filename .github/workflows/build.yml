@@ -120,6 +120,8 @@ jobs:
 
             echo "::group::Packaging ${APP_NAME} for ${PLATFORM}"
 
+            # Spring Boot fat JAR 无法被 jdeps 直接分析 (嵌套 BOOT-INF/lib 结构)
+            # 使用 Spring Boot 3.x 全覆盖模块列表, JRE 约 45MB
             MODULES="${FALLBACK_MODULES}"
             echo "Modules: ${MODULES}"
 
@@ -135,7 +137,7 @@ jobs:
             # 生成原生包
             jpackage \
               --name "${APP_NAME}" \
-              --input . \
+              --input "$(dirname "${JAR_FILE}")" \
               --main-jar "$(basename "${JAR_FILE}")" \
               --main-class "${MAIN_CLASS}" \
               --type app-image \
@@ -156,13 +158,13 @@ jobs:
           }
 
           pack_app \
-            "ai-router-standalone-${VERSION}.jar" \
+            "ai-router-standalone/target/ai-router-standalone-${VERSION}.jar" \
             "com.miniapi.router.standalone.MiniApiStandaloneApplication" \
             "MiniAPIRouter-Standalone" \
             "MiniAPIRouter-standalone"
 
           pack_app \
-            "ai-router-saas-${VERSION}.jar" \
+            "ai-router-saas/target/ai-router-saas-${VERSION}.jar" \
             "com.miniapi.router.saas.MiniApiSaasApplication" \
             "MiniAPIRouter-SaaS" \
             "MiniAPIRouter-saas"
