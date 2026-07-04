@@ -120,14 +120,7 @@ jobs:
 
             echo "::group::Packaging ${APP_NAME} for ${PLATFORM}"
 
-            # 分析模块依赖
-            MODULES=$(jdeps --print-module-deps --ignore-missing-deps --multi-release 21 -q "${JAR_FILE}" 2>/dev/null || true)
-            if [ -z "${MODULES}" ]; then
-              echo "jdeps 无法解析, 使用兜底模块列表"
-              MODULES="${FALLBACK_MODULES}"
-            else
-              MODULES="${MODULES},jdk.unsupported"
-            fi
+            MODULES="${FALLBACK_MODULES}"
             echo "Modules: ${MODULES}"
 
             # 裁剪 JRE
@@ -187,6 +180,7 @@ jobs:
             *.zip
           retention-days: 1
 
+  # ── 创建 GitHub Release ─────────────────────────────────────────────
   release:
     needs: [build, package]
     runs-on: ubuntu-latest
