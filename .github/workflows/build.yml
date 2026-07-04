@@ -150,6 +150,20 @@ jobs:
               --vendor "MiniAPI" \
               $([[ "${RUNNER_OS}" == "Windows" ]] && echo "--win-console")
 
+            if [[ "${RUNNER_OS}" == "Windows" ]]; then
+              cat > "dist/${APP_NAME}/run-console.cmd" <<EOF
+@echo off
+setlocal
+cd /d "%~dp0"
+"%~dp0${APP_NAME}.exe" %*
+set EXIT_CODE=%ERRORLEVEL%
+echo.
+echo Application exited with code %EXIT_CODE%.
+pause
+exit /b %EXIT_CODE%
+EOF
+            fi
+
             # 按平台归档
             if [[ "${RUNNER_OS}" == "Windows" ]]; then
               powershell -Command "Compress-Archive -Path '${APP_IMAGE_PATH}' -DestinationPath '${PREFIX}-${VERSION}-${PLATFORM}.zip'"
