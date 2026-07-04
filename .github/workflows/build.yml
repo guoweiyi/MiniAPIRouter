@@ -225,4 +225,7 @@ jobs:
 
             ## 提交记录
             ${{ needs.build.outputs.changelog }}
-          files: packages/*
+          files: |
+            packages/*.jar
+            packages/*.tar.gz
+            packages/*.zip
