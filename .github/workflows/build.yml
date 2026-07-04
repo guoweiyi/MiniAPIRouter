@@ -155,7 +155,7 @@ jobs:
                 '@echo off' \
                 'setlocal' \
                 'cd /d "%~dp0"' \
-                '"%~dp0${APP_NAME}.exe" %*' \
+                "\"%~dp0${APP_NAME}.exe\" %*" \
                 'set EXIT_CODE=%ERRORLEVEL%' \
                 'echo.' \
                 'echo Application exited with code %EXIT_CODE%.' \
