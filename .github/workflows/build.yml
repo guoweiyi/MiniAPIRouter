@@ -125,8 +125,6 @@ jobs:
 
             echo "::group::Packaging ${APP_NAME} for ${PLATFORM}"
 
-            # Spring Boot fat JAR 无法被 jdeps 直接分析 (嵌套 BOOT-INF/lib 结构)
-            # 使用 Spring Boot 3.x 全覆盖模块列表, JRE 约 45MB
             MODULES="${FALLBACK_MODULES}"
             echo "Modules: ${MODULES}"
 
@@ -149,7 +147,8 @@ jobs:
               --runtime-image jre \
               --dest dist \
               --app-version "${VERSION}" \
-              --vendor "MiniAPI"
+              --vendor "MiniAPI" \
+              $([[ "${RUNNER_OS}" == "Windows" ]] && echo "--win-console")
 
             # 按平台归档
             if [[ "${RUNNER_OS}" == "Windows" ]]; then
@@ -226,6 +225,6 @@ jobs:
             ## 提交记录
             ${{ needs.build.outputs.changelog }}
           files: |
-            packages/*.jar
-            packages/*.tar.gz
-            packages/*.zip
+            packages/**/*.jar
+            packages/**/*.tar.gz
+            packages/**/*.zip
