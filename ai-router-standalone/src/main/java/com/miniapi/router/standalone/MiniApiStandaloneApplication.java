@@ -15,9 +15,16 @@ import java.nio.file.Path;
 public class MiniApiStandaloneApplication {
 
     public static void main(String[] args) {
-        ensureDataDirectories();
-        SetupWizard.runIfFirstTime(args);
-        SpringApplication.run(MiniApiStandaloneApplication.class, args);
+        try {
+            ensureDataDirectories();
+            SetupWizard.runIfFirstTime(args);
+            SpringApplication.run(MiniApiStandaloneApplication.class, args);
+        } catch (Throwable t) {
+            System.err.println("[Fatal] MiniAPIRouter Standalone failed to start: " + t.getMessage());
+            t.printStackTrace(System.err);
+            pauseOnWindowsConsole();
+            throw t;
+        }
     }
 
     private static void ensureDataDirectories() {
@@ -28,6 +35,20 @@ public class MiniApiStandaloneApplication {
             System.setProperty("miniapi.router.data-dir", baseDir.toString());
         } catch (Exception e) {
             System.err.println("[Init] Failed to create data directories: " + e.getMessage());
+        }
+    }
+
+    private static void pauseOnWindowsConsole() {
+        String osName = System.getProperty("os.name", "").toLowerCase();
+        if (!osName.contains("win") || System.console() == null) {
+            return;
+        }
+
+        System.err.println();
+        System.err.println("Press Enter to exit...");
+        try {
+            System.in.read();
+        } catch (Exception ignored) {
         }
     }
 }
