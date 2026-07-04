@@ -151,17 +151,17 @@ jobs:
               $([[ "${RUNNER_OS}" == "Windows" ]] && echo "--win-console")
 
             if [[ "${RUNNER_OS}" == "Windows" ]]; then
-              cat > "dist/${APP_NAME}/run-console.cmd" <<EOF
-@echo off
-setlocal
-cd /d "%~dp0"
-"%~dp0${APP_NAME}.exe" %*
-set EXIT_CODE=%ERRORLEVEL%
-echo.
-echo Application exited with code %EXIT_CODE%.
-pause
-exit /b %EXIT_CODE%
-EOF
+              printf '%s\n' \
+                '@echo off' \
+                'setlocal' \
+                'cd /d "%~dp0"' \
+                '"%~dp0${APP_NAME}.exe" %*' \
+                'set EXIT_CODE=%ERRORLEVEL%' \
+                'echo.' \
+                'echo Application exited with code %EXIT_CODE%.' \
+                'pause' \
+                'exit /b %EXIT_CODE%' \
+                > "dist/${APP_NAME}/run-console.cmd"
             fi
 
             # 按平台归档
