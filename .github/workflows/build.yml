@@ -117,6 +117,11 @@ jobs:
             local MAIN_CLASS="$2"
             local APP_NAME="$3"
             local PREFIX="$4"
+            local APP_IMAGE_PATH="dist/${APP_NAME}"
+
+            if [[ "${RUNNER_OS}" == "macOS" ]]; then
+              APP_IMAGE_PATH="dist/${APP_NAME}.app"
+            fi
 
             echo "::group::Packaging ${APP_NAME} for ${PLATFORM}"
 
@@ -148,9 +153,9 @@ jobs:
 
             # 按平台归档
             if [[ "${RUNNER_OS}" == "Windows" ]]; then
-              powershell -Command "Compress-Archive -Path 'dist/${APP_NAME}' -DestinationPath '${PREFIX}-${VERSION}-${PLATFORM}.zip'"
+              powershell -Command "Compress-Archive -Path '${APP_IMAGE_PATH}' -DestinationPath '${PREFIX}-${VERSION}-${PLATFORM}.zip'"
             else
-              tar czf "${PREFIX}-${VERSION}-${PLATFORM}.tar.gz" -C dist "${APP_NAME}"
+              tar czf "${PREFIX}-${VERSION}-${PLATFORM}.tar.gz" -C dist "$(basename "${APP_IMAGE_PATH}")"
             fi
 
             rm -rf jre dist
